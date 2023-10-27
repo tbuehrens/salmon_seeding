@@ -1,0 +1,396 @@
+---
+title: "Seeding Report Card"
+author: Thomas Buehrens, WDFW (tbuehrens@dfw.wa.gov),
+output:
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{=html}
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src=\"https://privatelands.wdfw.wa.gov/wdfwlogo_clrnotxt.png"\" style=\"float: right;width: 150px;\"/>')
+   });
+</script>
+```
+
+------------------------------------------------------------------------
+
+Last Updated `r format(Sys.time(), '%m/%d/%Y')`.
+
+------------------------------------------------------------------------
+
+```{r set_options, echo = TRUE, message = FALSE}
+options(width = 100)
+knitr::opts_chunk$set(message = FALSE)
+set.seed(123)
+```
+
+
+## Functions
+Here, we define some functions to fit two forms of Ricker models and a Beverton Holt Model
+```{r set_up, echo = TRUE, message = FALSE}
+#function to install or load packages
+install_or_load_pack <- function(pack){
+  create.pkg <- pack[!(pack %in% installed.packages()[, "Package"])]
+  if (length(create.pkg))
+    install.packages(create.pkg, dependencies = TRUE,repos = "http://cran.us.r-project.org")
+  sapply(pack, require, character.only = TRUE)
+}
+
+#logit transform
+logit<-function(x){log(x/(1-x))}
+
+#inverse logit transform
+ilogit<-function(x){exp(x)/(1+exp(x))}
+
+#fit ricker model with separate hatchery and wild productivity
+nll_ricker<-function(par,P,R,S){
+  logalpha<-par[1]
+  alpha=exp(logalpha)
+  loginvbeta<-par[2]
+  beta<-1/exp(loginvbeta)
+  logitb<-par[3]
+  b<-ilogit(logitb)
+  logsigma<-par[4]
+  sigma<-exp(logsigma)
+  R_hat<-(alpha * (1-P) * S + alpha * b * P * S) * exp(-1 * beta * S) 
+  resid<-log(R_hat)-log(R)
+  nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
+}
+
+#fit linearized ricker model with covariate effect on pHOS
+nll_ricker2<-function(par,P,R,S){
+  logalpha<-par[1]
+  alpha=exp(logalpha)
+  loginvbeta<-par[2]
+  beta<-1/exp(loginvbeta)
+  b<-par[3]
+  logsigma<-par[4]
+  sigma<-exp(logsigma)
+  logRS_hat<- log(alpha) - beta * S + b * P 
+  resid<-logRS_hat-log(R/S)
+  nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
+}
+
+#fit beverton-holt model with separate hatchery and wild productivity
+nll_bh<-function(par,P,R,S){
+  logalpha<-par[1]
+  alpha=exp(logalpha)
+  logbeta<-par[2]
+  beta<-exp(logbeta)
+  logitb<-par[3]
+  b<-ilogit(logitb)
+  logsigma<-par[4]
+  sigma<-exp(logsigma)
+  R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) /beta) 
+  resid<-log(R_hat)-log(R)
+  nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
+}
+
+#helper function for transforming ricker model params to link scales for estimation (to constrain them to proper domains; e.g., alpha to be positive)
+ricker_transform<-function(real_par){
+  return(c(
+    logalpha=log(real_par[1]),
+    loginvbeta=log(1/real_par[2]),
+    logitb=logit(real_par[3]),
+    logsigma=log(real_par[4])
+    )
+  )
+}
+
+#ricker back transform
+ricker_inv_transform<-function(par){
+  par<-as.vector(par)
+  return(c(
+    alpha=exp(par[1]),
+    beta=1/exp(par[2]),
+    b=ilogit(par[3]),
+    sigma=exp(par[4])
+    )
+  )
+}
+
+#helper function for transforming ricker model version 2 params to link scales for estimation (to constrain them to proper domains; e.g., alpha to be positive)
+ricker_2_transform<-function(real_par){
+  return(c(
+    logalpha=log(real_par[1]),
+    loginvbeta=log(1/real_par[2]),
+    b=real_par[3],
+    logsigma=log(real_par[4])
+  )
+  )
+}
+
+#ricker back transform
+ricker_2_inv_transform<-function(par){
+  par<-as.vector(par)
+  return(c(
+    alpha=exp(par[1]),
+    beta=1/exp(par[2]),
+    b=par[3],
+    sigma=exp(par[4])
+  )
+  )
+}
+
+
+bh_transform<-function(real_par){
+  return(c(
+    logalpha=log(real_par[1]),
+    logbeta=log(real_par[2]),
+    logitb=logit(real_par[3]),
+    logsigma=log(real_par[4])
+  )
+  )
+}
+
+#beverton-holt back transform
+bh_inv_transform<-function(par){
+  par<-as.vector(par)
+  return(c(
+    alpha=exp(par[1]),
+    beta=exp(par[2]),
+    b=ilogit(par[3]),
+    sigma=exp(par[4])
+  )
+  )
+}
+```
+
+## Load Packages
+```{r load_packages, message = FALSE, warning = FALSE,results = "hide"}
+install_or_load_pack(pack = c("tidyverse","RColorBrewer","kableExtra","gridExtra","viridis"))
+```
+
+## Load Data
+```{r user_inputs_data, message = FALSE, warning = FALSE,results = "show",fig.align='center',fig.show=TRUE, fig.cap="Figure 1. Stock recruit data"}
+dat<-read_csv("Tilton_CK_juv_recruits_vs_female_spawners.csv")
+
+dat%>%
+  kbl(caption = paste0("Table 1. Example data to fit SR models to develop a seeding report card (in this case Tilton Chinook female hatchery and wild Spawners and the smolt recruits they produced)"),digits =2)%>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+dat%<>%
+  #filter(`Brood Year`>2010)%>%
+  mutate(S=Wild+Hatchery,
+         P=Hatchery/S,
+         R=Recruits,
+         lnrs=log(R/S)
+         )%>%
+  dplyr::rename(brood_year=`Brood Year`)%>%
+  filter(!is.na(P),R>0)
+
+ggplot(dat,aes(x=S,y=R,color=P))+
+  geom_point(size=2)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  labs(x="Spawners",y="Recruits",color="pHOS")+
+  scale_color_viridis_c()
+```
+
+
+# Fit SR Models
+NOTE: Make sure to check that the convergence value is 0 for each model (i.e., they each converged...otherwise need to change initial values)
+
+Here we will fit three SR models:
+
+First, a modified Ricker model where the total spawners $S$ are multiplied by pHOS $p$ and pNOS $(1-p)$ to derive hatchery and wild spawners and allow us to model their productivities discretely.The recruitment $R$ is function of wild and hatchery spawners where the productivity $\alpha$ for hatchery spawners is multiplied by the relative reproductive success $b$. Density dependence, which is a function of $\beta$ (the inverse of the number of spawners generating the maximum recruitment $Rmax$), is related to total spawner abundance independent of origin:
+1) $$R = (\alpha (1-p) S + apbS) e^{-\beta S}  e^\epsilon$$
+where parameters were fit subject to the following constraints:
+$$0<\alpha,\sigma, \beta$$
+$$0<b<1$$
+$$\epsilon \text{~} normal(0,\sigma)$$
+
+Second, a Ricker model where recruitment $R$ is modeled conventionally as a function of total spawners, but a multiplicative covariate effect $b$ on pHOS $p$ is added to the right hand side of the equation:
+2) $$R = \alpha S e^{-\beta S} e^{bp} e^\epsilon$$
+where parameters were fit subject to the following constraints:
+$$0<\alpha,\sigma, \beta$$
+$$\epsilon \text{~} normal(0,\sigma)$$
+
+Third, a Beverton-Holt model where recruitment $R$ is modeled as a function of hatchery spawners $pS$ and wild spawners $(1-p)S$ and the productivity of the hatchery spawners is multiplied by their estimated relative reproductive success $b$. In this case there is one maximum recruitment value for the population $\beta$ also known as $Rmax$ but different productivity depending on origin.
+3) $$R = \frac {\alpha (1-p) S + \alpha p b S}{1 + {\frac {\alpha (1-p) S + \alpha p b S} \beta} } $$
+where parameters were fit subject to the following constraints:
+$$0<\alpha,\sigma, \beta$$
+$$0<b<1$$
+$$\epsilon \text{~} normal(0,\sigma)$$
+
+
+```{r Analysis_v2, message=FALSE, warning=FALSE, results="hide",cache=TRUE}
+alpha_guess<-max(exp(dat$lnrs)) #guess alpha parameter
+ricker_beta_guess<--lm(lnrs~S,data=dat)$coef[2] #guess beta parameter
+bh_beta_guess<-max(dat$Recruits) #guess beta parameter
+b_guess<-0.1 #guess Relative Reproductive Success of Hatchery Fish
+sigma_guess<-0.4 #guess log-normal residual error sd of SR model
+
+
+result <- optim(par = ricker_transform(real_par=c(alpha_guess, ricker_beta_guess,b_guess,sigma_guess)), fn = nll_ricker, R = dat$R , S = dat$S,P=dat$P) # par is the initial values of the coefficients
+result$par<-ricker_inv_transform(par=result$par) # the maximum likelihood estimates of the coefficients
+result$value # the minimum value of the negative log-likelihood
+result$convergence # the convergence code (0 means successful convergence)
+
+result2 <- optim(par = ricker_2_transform(real_par=c(alpha_guess, ricker_beta_guess,-(0.2/b_guess),sigma_guess)), fn = nll_ricker2,  R = dat$R , S = dat$S,P=dat$P) # par is the initial values of the coefficients
+result2$par<-ricker_2_inv_transform(par=result2$par) # the maximum likelihood estimates of the coefficients
+result2$value # the minimum value of the negative log-likelihood
+result2$convergence # the convergence code (0 means successful convergence)
+
+result3 <- optim(bh_transform(real_par= c(alpha_guess, bh_beta_guess,b_guess,sigma_guess)), fn = nll_bh,  R = dat$R , S = dat$S,P=dat$P) # par is the initial values of the coefficients
+result3$par<-bh_inv_transform(par=result3$par) # the maximum likelihood estimates of the coefficients
+result3$value # the minimum value of the negative log-likelihood
+result3$convergence # the convergence code (0 means successful convergence)
+```
+
+
+# Results
+```{r Results, message=FALSE, warning=FALSE, results="show",cache=TRUE}
+
+params<-tibble(model = c("Ricker", "Ricker version 2", "Beverton-Holt"))%>%
+                 bind_cols(bind_rows(result$par,result2$par,result3$par))%>%
+                 set_names(c("model","alpha","beta","b","sigma")
+                 )%>%
+  mutate(Rmax= ifelse(model=="Beverton-Holt",beta,alpha*(1/beta)*exp(-beta*(1/beta))))
+
+params%>%
+  kbl(caption = paste0("Table 2. SR params from three models; alpha is max R/S for all models; beta is 1/spawners that produce max recruits for ricker but is equal to max recruits for Beverton-Holt; b is relative reproductive success of hatchery fish for Ricker version 1 and for Beverton-Holt but is the slope of a coefficient for the effect of pHOS on recruitment for Ricker version 2; sigma is log-normal residual error sd; Rmax is maximum recruitment."),digits =4)%>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+  
+fits<-expand_grid(S=seq(1,5000,length.out=100),P=seq(0,0.99,length.out=100))%>%
+  mutate(
+    Ricker = (result$par[1] * (1-P) * S + result$par[1] * result$par[3] * P * S) * exp(-1 * result$par[2] * S),
+    `Ricker version 2` = exp(log(result2$par[1]) - result2$par[2] * S + result2$par[3] * P)*S,#log(P/(1-P))
+    `Beverton-Holt` =(result3$par[1] * (1-P) * S + result3$par[1] * result3$par[3] * P * S)/(1 + (result3$par[1] * (1-P) * S + result3$par[1] * result3$par[3] *P * S) /result3$par[2])
+  )
+
+
+fits2<-expand_grid(S=seq(1,5000,length.out=100),P=seq(0,1,length.out=11))%>%
+  mutate(
+    Ricker = (result$par[1] * (1-P) * S + result$par[1] * result$par[3] * P * S) * exp(-1 * result$par[2] * S),
+    `Ricker version 2` = exp(log(result2$par[1]) - result2$par[2] * S + result2$par[3] * P)*S,#log(P/(1-P))
+    `Beverton-Holt` =(result3$par[1] * (1-P) * S + result3$par[1] * result3$par[3] * P * S)/(1 + (result3$par[1] * (1-P) * S + result3$par[1] * result3$par[3] *P * S) /result3$par[2])
+  )
+
+
+#color_palette <- brewer.pal(11,"RdBu")
+
+p1<-ggplot(fits,aes(x=S,y=P),alpha=0.5)+
+  geom_tile(aes(fill=as.factor(round(Ricker/max(params$Rmax[params$model=="Ricker"]),1))))+
+  scale_fill_viridis_d(name = "R/Rmax", guide=guide_legend(override.aes = list(shape=NA)))+
+  # scale_fill_manual(values = alpha(color_palette,0.35), name = "R/Rmax",
+  #                   guide=guide_legend(override.aes = list(shape=NA)))+
+  geom_label(dat,mapping=aes(x=S,y=P),label=dat$brood_year,color="black",fill=NA,label.size=NA,size=3)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  ylab("pHOS")+
+  xlab("Female Spawners")+
+  labs(title="Ricker version 1")+
+  theme(aspect.ratio = 1)#+
+  #theme(legend.position = "none")
+
+p2<-ggplot(fits,aes(x=S,y=P),alpha=0.5)+
+  geom_tile(aes(fill=as.factor(round(`Ricker version 2`/max(params$Rmax[params$model=="Ricker version 2"]),1))))+
+  scale_fill_viridis_d(name = "R/Rmax", guide=guide_legend(override.aes = list(shape=NA)))+
+  # scale_fill_manual(values = alpha(color_palette,0.35), name = "R/Rmax",
+  #                   guide=guide_legend(override.aes = list(shape=NA)))+
+  geom_label(dat,mapping=aes(x=S,y=P),label=dat$brood_year,color="black",fill=NA,label.size=NA,size=3)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  ylab("pHOS")+
+  xlab("Female Spawners")+
+  labs(title="Ricker version 2")+
+  theme(aspect.ratio = 1)#+
+  #theme(legend.position = "none")
+
+
+p3<-ggplot(fits,aes(x=S,y=P),alpha=0.5)+
+  geom_tile(aes(fill=as.factor(round(`Beverton-Holt`/max(params$Rmax[params$model=="Beverton-Holt"]),1))))+
+  scale_fill_viridis_d(name = "R/Rmax", guide=guide_legend(override.aes = list(shape=NA)))+
+  # scale_fill_manual(values = alpha(color_palette,0.35), name = "R/Rmax",
+  #                   guide=guide_legend(override.aes = list(shape=NA)))+
+  geom_label(dat,mapping=aes(x=S,y=P),label=dat$brood_year,color="black",fill=NA,label.size=NA,size=3)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  ylab("pHOS")+
+  xlab("Female Spawners")+
+  labs(title="Beverton-Holt")+
+  theme(aspect.ratio = 1)#+
+  #theme(legend.position = "right")
+
+figure3<-ggplot(
+  fits2%>%
+    pivot_longer(cols=!c(S,P),names_to = "model",values_to = "R")%>%
+    arrange(model,S,P)%>%
+    group_by(S,R,P,model)%>%
+    left_join(params%>%
+                dplyr::select(model,Rmax)
+              )%>%
+    arrange(model,rev(P),S)
+    
+  ,aes(x=S,y=R,group=interaction(model,P)))+
+  geom_line(aes(color=as.factor(P)),size=2)+
+  facet_wrap(~model, nrow = 1)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  labs(x="Spawners",y="Recruits",color="pHOS")+
+  scale_color_viridis_d()
+
+
+figure4<-ggplot(
+  fits2%>%
+    pivot_longer(cols=!c(S,P),names_to = "model",values_to = "R")%>%
+    arrange(model,S,P)%>%
+    group_by(S,R,P,model)%>%
+    left_join(params%>%
+                dplyr::select(model,Rmax)
+              )%>%
+    arrange(model,rev(P),S)
+    
+  ,aes(x=S,y=R/Rmax,group=interaction(model,P)))+
+  geom_line(aes(color=as.factor(P)),size=2)+
+  facet_wrap(~model, nrow = 1)+
+  xlim(0,NA)+
+  ylim(0,NA)+
+  labs(x="Spawners",y="R/Rmax",color="pHOS")+
+  scale_color_viridis_d()
+
+```
+
+```{r message=FALSE, warning=FALSE, results="hide", fig.align='center',fig.show=TRUE, fig.cap="Figure 2.The proportion of full seeding predicted by three stock recruit models as a function of spawner abundance and pHOS. Data points from each year are shown on the graph, depicting the predicted (as opposed to observed) seeding for that year."}
+#grid.arrange(p1, p2, p3, ncol = 1, respect=T)
+p1
+p2
+p3
+```
+
+```{r message=FALSE, warning=FALSE, results="hide", fig.align='center',fig.show=TRUE, fig.cap="Figure 3.The effect of pHOS on the expected recruitment relationship based on three SR fits."}
+figure3
+```
+
+
+```{r message=FALSE, warning=FALSE, results="hide", fig.align='center',fig.show=TRUE, fig.cap="Figure 4.The effect of pHOS on the expected % of full seeding (R/Rmax) depending on spawner abundance and pHOS."}
+figure4
+```
+
+
+# Possible Use Cases
+This analysis may be useful for:
+1) empirical estimates of productivity (alpha), capacity (Rmax), and relative reproductive success (b for Ricker version 1 and Beverton-Holt models)
+2) to determine what level of seeding is accomplished based on various spawner abundances and pHOS levels (for in-season and post-season evaluations)
+3) to ground truth heuristic models like AHA 
