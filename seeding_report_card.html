@@ -2282,13 +2282,13 @@ function of <span class="math inline">\(\beta\)</span> (the inverse of
 the number of spawners generating the maximum recruitment <span class="math inline">\(Rmax\)</span>), is related to total spawner
 abundance independent of origin: 1) <span class="math display">\[R =
 (\alpha (1-p) S + apbS) e^{-\beta S}  e^\epsilon\]</span> where
-parameters were fit subject to the following constraints: <span class="math display">\[0&lt;\alpha,\sigma, \beta\]</span> <span class="math display">\[0&lt;b&lt;1\]</span> <span class="math display">\[\epsilon \text{~} normal(0,\sigma)\]</span></p>
+parameters were fit subject to the following constraints: <span class="math display">\[0&lt;\alpha,\sigma, \beta\]</span> <span class="math display">\[0&lt;b&lt;1\]</span> <span class="math display">\[\epsilon \sim normal(0,\sigma)\]</span></p>
 <p>Second, a Ricker model where recruitment <span class="math inline">\(R\)</span> is modeled conventionally as a function
 of total spawners, but a multiplicative covariate effect <span class="math inline">\(b\)</span> on pHOS <span class="math inline">\(p\)</span> is added to the right hand side of the
 equation: 2) <span class="math display">\[R = \alpha S e^{-\beta S}
 e^{bp} e^\epsilon\]</span> where parameters were fit subject to the
 following constraints: <span class="math display">\[0&lt;\alpha,\sigma,
-\beta\]</span> <span class="math display">\[\epsilon \text{~}
+\beta\]</span> <span class="math display">\[\epsilon \sim
 normal(0,\sigma)\]</span></p>
 <p>Third, a Beverton-Holt model where recruitment <span class="math inline">\(R\)</span> is modeled as a function of hatchery
 spawners <span class="math inline">\(pS\)</span> and wild spawners <span class="math inline">\((1-p)S\)</span> and the productivity of the
@@ -2296,10 +2296,10 @@ hatchery spawners is multiplied by their estimated relative reproductive
 success <span class="math inline">\(b\)</span>. In this case there is
 one maximum recruitment value for the population <span class="math inline">\(\beta\)</span> also known as <span class="math inline">\(Rmax\)</span> but different productivity depending
 on origin. 3) <span class="math display">\[R = \frac {\alpha (1-p) S +
-\alpha p b S}{1 + {\frac {\alpha (1-p) S + \alpha p b S} \beta} }
-\]</span> where parameters were fit subject to the following
+\alpha p b S}{1 + {\frac {\alpha (1-p) S + \alpha p b S} \beta}
+}e^\epsilon \]</span> where parameters were fit subject to the following
 constraints: <span class="math display">\[0&lt;\alpha,\sigma,
-\beta\]</span> <span class="math display">\[0&lt;b&lt;1\]</span> <span class="math display">\[\epsilon \text{~} normal(0,\sigma)\]</span></p>
+\beta\]</span> <span class="math display">\[0&lt;b&lt;1\]</span> <span class="math display">\[\epsilon \sim normal(0,\sigma)\]</span></p>
 <pre class="r"><code>alpha_guess&lt;-max(exp(dat$lnrs)) #guess alpha parameter
 ricker_beta_guess&lt;--lm(lnrs~S,data=dat)$coef[2] #guess beta parameter
 bh_beta_guess&lt;-max(dat$Recruits) #guess beta parameter

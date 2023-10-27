@@ -216,20 +216,20 @@ First, a modified Ricker model where the total spawners $S$ are multiplied by pH
 where parameters were fit subject to the following constraints:
 $$0<\alpha,\sigma, \beta$$
 $$0<b<1$$
-$$\epsilon \text{~} normal(0,\sigma)$$
+$$\epsilon \sim normal(0,\sigma)$$
 
 Second, a Ricker model where recruitment $R$ is modeled conventionally as a function of total spawners, but a multiplicative covariate effect $b$ on pHOS $p$ is added to the right hand side of the equation:
 2) $$R = \alpha S e^{-\beta S} e^{bp} e^\epsilon$$
 where parameters were fit subject to the following constraints:
 $$0<\alpha,\sigma, \beta$$
-$$\epsilon \text{~} normal(0,\sigma)$$
+$$\epsilon \sim normal(0,\sigma)$$
 
 Third, a Beverton-Holt model where recruitment $R$ is modeled as a function of hatchery spawners $pS$ and wild spawners $(1-p)S$ and the productivity of the hatchery spawners is multiplied by their estimated relative reproductive success $b$. In this case there is one maximum recruitment value for the population $\beta$ also known as $Rmax$ but different productivity depending on origin.
-3) $$R = \frac {\alpha (1-p) S + \alpha p b S}{1 + {\frac {\alpha (1-p) S + \alpha p b S} \beta} } $$
+3) $$R = \frac {\alpha (1-p) S + \alpha p b S}{1 + {\frac {\alpha (1-p) S + \alpha p b S} \beta} }e^\epsilon $$
 where parameters were fit subject to the following constraints:
 $$0<\alpha,\sigma, \beta$$
 $$0<b<1$$
-$$\epsilon \text{~} normal(0,\sigma)$$
+$$\epsilon \sim normal(0,\sigma)$$
 
 
 ```{r Analysis_v2, message=FALSE, warning=FALSE, results="hide",cache=TRUE}
