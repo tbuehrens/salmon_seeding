@@ -83,7 +83,7 @@ nll_ricker2<-function(par,P,R,S){
   b<-par[3]
   logsigma<-par[4]
   sigma<-exp(logsigma)
-  logRS_hat<- log(alpha) - beta * S + b * P 
+  logRS_hat<- log(alpha) - beta * S + b * P
   resid<-logRS_hat-log(R/S)
   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
 }

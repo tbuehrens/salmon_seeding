@@ -1850,7 +1850,7 @@ nll_ricker2&lt;-function(par,P,R,S){
   b&lt;-par[3]
   logsigma&lt;-par[4]
   sigma&lt;-exp(logsigma)
-  logRS_hat&lt;- log(alpha) - beta * S + b * P 
+  logRS_hat&lt;- log(alpha) - beta * S + b * P
   resid&lt;-logRS_hat-log(R/S)
   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
 }
