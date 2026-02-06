@@ -103,6 +103,22 @@ nll_bh<-function(par,P,R,S){
   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
 }
 
+
+#fit beverton-holt model 2 with separate hatchery and wild productivity & separate capacity, BUT where difference in prod and cap are same 
+# nll_bh2<-function(par,P,R,S){
+#   logalpha<-par[1]
+#   alpha=exp(logalpha)
+#   logbeta<-par[2]
+#   beta<-exp(logbeta)
+#   logitb<-par[3]
+#   b<-ilogit(logitb)
+#   logsigma<-par[4]
+#   sigma<-exp(logsigma)
+#   R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) / (b * P * beta + (1-P) * beta)) 
+#   resid<-log(R_hat)-log(R)
+#   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
+# }
+
 #helper function for transforming ricker model params to link scales for estimation (to constrain them to proper domains; e.g., alpha to be positive)
 ricker_transform<-function(real_par){
   return(c(
@@ -175,7 +191,8 @@ bh_inv_transform<-function(par){
 
 ## Load Packages
 ```{r load_packages, message = FALSE, warning = FALSE,results = "hide"}
-install_or_load_pack(pack = c("tidyverse","RColorBrewer","kableExtra","gridExtra","viridis"))
+# install_or_load_pack(pack = c("tidyverse","RColorBrewer","kableExtra","gridExtra","viridis"))
+pacman::p_load(tidyverse,RColorBrewer,kableExtra,gridExtra,viridis)
 ```
 
 ## Load Data
@@ -394,3 +411,18 @@ This analysis may be useful for:
 1) empirical estimates of productivity (alpha), capacity (Rmax), and relative reproductive success (b for Ricker version 1 and Beverton-Holt models)
 2) to determine what level of seeding is accomplished based on various spawner abundances and pHOS levels (for in-season and post-season evaluations)
 3) to ground truth heuristic models like AHA 
+
+
+```{r}
+fits2%>%
+  filter(P%in%c(0,1))%>%
+  pivot_longer(names_to = "model",values_to = "R",cols=c("Ricker",`Ricker version 2`, "Beverton-Holt"))%>%
+  pivot_wider(names_from = P, values_from = R)%>%
+  mutate(RRS=(`0`/S)/(`1`/S))%>%
+  ggplot(aes(x=S,y=RRS,color=model))+
+  facet_grid(rows=vars(model),scales = "free")+
+  geom_line()
+
+```
+
+
