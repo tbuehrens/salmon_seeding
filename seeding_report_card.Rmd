@@ -89,6 +89,22 @@ nll_ricker2<-function(par,P,R,S){
 }
 
 #fit beverton-holt model with separate hatchery and wild productivity
+# nll_bh<-function(par,P,R,S){
+#   logalpha<-par[1]
+#   alpha=exp(logalpha)
+#   logbeta<-par[2]
+#   beta<-exp(logbeta)
+#   logitb<-par[3]
+#   b<-ilogit(logitb)
+#   logsigma<-par[4]
+#   sigma<-exp(logsigma)
+#   R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) /beta) 
+#   resid<-log(R_hat)-log(R)
+#   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
+# }
+
+
+#fit beverton-holt model 2 with separate hatchery and wild productivity & separate capacity, BUT where difference in prod and cap are same 
 nll_bh<-function(par,P,R,S){
   logalpha<-par[1]
   alpha=exp(logalpha)
@@ -98,26 +114,10 @@ nll_bh<-function(par,P,R,S){
   b<-ilogit(logitb)
   logsigma<-par[4]
   sigma<-exp(logsigma)
-  R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) /beta) 
+  R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) / (b * P * beta + (1-P) * beta)) 
   resid<-log(R_hat)-log(R)
   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
 }
-
-
-#fit beverton-holt model 2 with separate hatchery and wild productivity & separate capacity, BUT where difference in prod and cap are same 
-# nll_bh2<-function(par,P,R,S){
-#   logalpha<-par[1]
-#   alpha=exp(logalpha)
-#   logbeta<-par[2]
-#   beta<-exp(logbeta)
-#   logitb<-par[3]
-#   b<-ilogit(logitb)
-#   logsigma<-par[4]
-#   sigma<-exp(logsigma)
-#   R_hat<-(alpha * (1-P) * S + alpha * b * P * S)/(1 + (alpha * (1-P) * S + alpha * b * P * S) / (b * P * beta + (1-P) * beta)) 
-#   resid<-log(R_hat)-log(R)
-#   nll=sum(-1*log(dnorm(resid,mean = 0,sd = sigma)))
-# }
 
 #helper function for transforming ricker model params to link scales for estimation (to constrain them to proper domains; e.g., alpha to be positive)
 ricker_transform<-function(real_par){
